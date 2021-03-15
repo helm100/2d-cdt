@@ -3,9 +3,9 @@
 
 #include <vector>
 #include <random>
-#include <iostream>
-#include <fstream>
-#include <unordered_map>
+#include <iostream> //for export geometry
+#include <fstream> //for export geometry
+#include <unordered_map> //for export geometry
 #include "vertex.hpp"
 #include "link.hpp"
 #include "triangle.hpp"
@@ -16,6 +16,7 @@ class Universe {
 public:
 	static int nSlices;
 	static std::vector<int> sliceSizes;
+	static int magnTot [Triangle::nSpins];
 	static bool sphere;
 	static bool imported;
 
@@ -27,12 +28,17 @@ public:
 
 	static void create(int n_slices);
 
+	// static double importGeometry(std::string geometryFilename);
+	// static void exportGeometry(std::string geometryFilename, double lambda);
+	// static std::string getGeometryFilename(int targetVolume, int slices, double isingJ, int seed);
+
 	// moves
-	static void insertVertex(Triangle::Label t);
+	static void insertVertex(Triangle::Label t, std::array<int,Triangle::nSpins> snew, std::array<int,Triangle::nSpins> scnew);
 	static void removeVertex(Vertex::Label v);
 	enum flipSide { LEFT, RIGHT };
 	static void flipLink(Vertex::Label v, flipSide side);
 	static void flipLink(Triangle::Label t);
+	static void flipSpin(Triangle::Label t, int position);
 
 	// bag consistency
 	static void updateVertexCoord(Vertex::Label v, int up, int down);
@@ -43,10 +49,6 @@ public:
 	static void updateVertexData();
 	static void updateLinkData();
 	static void updateTriangleData();
-
-	static void exportGeometry(std::string geometryFilename);
-	static void importGeometry(std::string geometryFilename);
-	static std::string getGeometryFilename(int targetVolume, int slices, int seed);
 
 	static std::vector<Vertex::Label> vertices;
 	static std::vector<Link::Label> links;

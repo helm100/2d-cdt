@@ -3,6 +3,7 @@
 
 int Universe::nSlices = 0;
 std::vector<int> Universe::sliceSizes;
+int Universe::magnTot [Triangle::nSpins]; //gets updated in Universe::updateTriangleData()
 bool Universe::sphere = false;
 bool Universe::imported = false;
 std::default_random_engine Universe::rng(0);  // TODO(JorenB): set seed somewhere else
@@ -41,6 +42,7 @@ void Universe::initialize() {
 
 	// create triangles
 	std::vector<Triangle::Label> initialTriangles(2*w*t);
+	std::uniform_int_distribution<int> binDis(0,1);
 	for(int i = 0; i < t; i++) {
 		for(int j = 0; j < w; j++) {
 			auto tl = Triangle::create();
@@ -56,6 +58,14 @@ void Universe::initialize() {
 					initialVertices[((i+1)%t)*w+(j+1)%w],
 					initialVertices[i*w+(j+1)%w]);
 			initialTriangles[2*(i*w+j)+1] = tr;
+
+			std::array<int,Triangle::nSpins> newSpinsL;
+			for (int i = 0; i < Triangle::nSpins; i++) newSpinsL[i] = 2*binDis(rng)-1;
+			std::array<int,Triangle::nSpins> newSpinsR;
+			for (int i = 0; i < Triangle::nSpins; i++) newSpinsR[i] = 2*binDis(rng)-1;
+
+			tl->setSpins( newSpinsL ); 
+			tr->setSpins( newSpinsR ); //pointers?? binDis(rng)
 			trianglesAll.add(tl);
 			trianglesAll.add(tr);
 
@@ -84,7 +94,7 @@ void Universe::initialize() {
 }
 
 
-void Universe::insertVertex(Triangle::Label t) {
+void Universe::insertVertex(Triangle::Label t, std::array<int,Triangle::nSpins> snew, std::array<int,Triangle::nSpins> scnew) {
 	Triangle::Label tc = t->getTriangleCenter();
 
 	Vertex::Label vr = t->getVertexRight();
@@ -109,6 +119,9 @@ void Universe::insertVertex(Triangle::Label t) {
 
 	t1->setTriangles(t, t->getTriangleRight(), t2);
 	t2->setTriangles(tc, tc->getTriangleRight(), t1);
+
+	t1->setSpins(snew); t2->setSpins(scnew);
+	// magnTot += snew + scnew;
 
 	if (t1->type != t1->getTriangleRight()->type) {
 		trianglesFlip.remove(t);
@@ -150,6 +163,9 @@ void Universe::removeVertex(Vertex::Label v) {
 		trianglesFlip.remove(trc);
 		trianglesFlip.add(tlc);
 	}
+
+	// int sr = tr->getSpin(); int scr = trc->getSpin();
+	// magnTot -= (sr + scr);
 
 	Triangle::destroy(tr);
 	Triangle::destroy(trc);
@@ -194,6 +210,12 @@ void Universe::flipLink(Triangle::Label t) {
 	if ((!trianglesFlip.contains(tr)) && (tr->type != tr->getTriangleRight()->type)) trianglesFlip.add(tr);
 }
 
+void Universe::flipSpin(Triangle::Label t, int position){
+	assert(t->hasSpin(position));
+	t -> setSpin(-1*(t->getSpin(position)), position );
+	// magnTot += 2*(t->getSpin());
+}
+
 bool Universe::isFourVertex(Vertex::Label v) {
 	return (v->getTriangleLeft()->getTriangleRight() == v->getTriangleRight())
 				&& (v->getTriangleLeft()->getTriangleCenter()->getTriangleRight() == v->getTriangleRight()->getTriangleCenter());
@@ -208,6 +230,8 @@ void Universe::check() {
 		assert(t->getVertexLeft() >= 0);
 		assert(t->getVertexRight() >= 0);
 		assert(t->getVertexCenter() >= 0);
+
+		assert(t->hasSpin(0));
 
 		if (trianglesFlip.contains(t)) {
 			assert(t->type != t->getTriangleRight()->type);
@@ -321,11 +345,11 @@ void Universe::updateLinkData() {
 	int max = 0;
 
 	vertexLinks.clear();
-	for (auto i = 0u; i < vertexNeighbors.size(); i++) {
+	for (int i = 0; i < vertexNeighbors.size(); i++) {
 		vertexLinks.push_back({});
 	}
 	triangleLinks.clear();
-	for (auto i = 0u; i < triangleNeighbors.size(); i++) {
+	for (int i = 0; i < triangleNeighbors.size(); i++) {
 		triangleLinks.push_back({-1, -1, -1});
 	}
 
@@ -364,9 +388,10 @@ void Universe::updateLinkData() {
 void Universe::updateTriangleData() {
 	triangles.clear();
 	int max = 0;
+	for (int i = 0; i < Triangle::nSpins; i++) magnTot[i] = 0;
 	for (auto t : trianglesAll) {
 		triangles.push_back(t);
-
+		for (int i = 0; i < Triangle::nSpins; i++) magnTot[i] += t->getSpin(i);
 		if (t > max) max = t;
 	}
 
@@ -386,160 +411,4 @@ void Universe::updateTriangleData() {
 
 		triangleNeighbors.at(t) = {t->getTriangleLeft(), t->getTriangleRight(), t->getTriangleCenter()};
 	}
-}
-
-void Universe::exportGeometry(std::string geometryFilename) {
-	updateTriangleData();
-	updateVertexData();
-
-	std::unordered_map<int, int> vertexMap;
-	std::vector<Vertex::Label> intVMap;
-	intVMap.resize(vertices.size());
-
-	int i = 0;
-	for (auto v : vertices) {
-		vertexMap.insert({v, i});
-		intVMap.at(i) = v;
-		i++;
-	}
-
-	std::unordered_map<int, int> triangleMap;
-	std::vector<Triangle::Label> intTMap;
-	intTMap.resize(triangles.size());
-
-	i = 0;
-	for (auto t : triangles) {
-		triangleMap.insert({t, i});
-		intTMap.at(i) = t;
-		i++;
-	}
-
-	std::string output;
-
-	output += std::to_string(vertices.size());
-	output += "\n";
-
-	for (int j = 0; j < intVMap.size(); j++) {
-		output += std::to_string(intVMap.at(j)->time);
-		output += "\n";
-	}
-
-	output += std::to_string(vertices.size());
-	output += "\n";
-	output += std::to_string(triangles.size());
-	output += "\n";
-
-	for (int j = 0; j < intTMap.size(); j++) {
-		Triangle::Label t = intTMap.at(j);
-
-		Vertex::Label tVs [3] = {t->getVertexLeft(),t->getVertexRight(),t->getVertexCenter()};
-		for (auto v : tVs) {
-			output += std::to_string(vertexMap.at(v));
-			output += "\n";
-		}
-
-		Triangle::Label tNeighb [3] = {t->getTriangleLeft(),t->getTriangleRight(),t->getTriangleCenter()};
-		for (auto t : tNeighb) {
-			output += std::to_string(triangleMap.at(t));
-			output += "\n";
-		}
-	}
-
-	output += std::to_string(triangles.size());
-
-	std::ofstream file;
-	file.open(geometryFilename, std::ios::out | std::ios::trunc);
-	assert(file.is_open());
-
-	file << output << "\n";
-	file.close();
-
-	std::cout << geometryFilename << "\n";
-}
-
-void Universe::importGeometry(std::string geometryFilename) {
-	std::ifstream infile(geometryFilename.c_str());
-	assert(!infile.fail());
-	int line;
-
-	int nV;
-	infile >> nV;
-	std::vector<Vertex::Label> vs(nV);
-
-	int maxTime = 0;
-	for (int i = 0; i < nV; i++) {
-		infile >> line;
-		auto v = Vertex::create();
-		v->time = line;
-		vs.at(i) = v;
-		if (v->time > maxTime) maxTime = v->time;
-	}
-	infile >> line;
-	assert(line == nV);
-
-	nSlices = maxTime+1;
-	sliceSizes.resize(maxTime+1);
-	std::fill(sliceSizes.begin(), sliceSizes.end(), 0);
-
-	int nT;
-	infile >> nT;
-	for (int i = 0; i < nT; i++) {
-		auto t = Triangle::create();
-
-		int tVs[3];
-		for (int j = 0; j < 3; j++) {
-			infile >> tVs[j];
-		}
-
-		int tNeighb[3];
-		for (int j = 0; j < 3; j++) {
-			infile >> tNeighb[j];
-		}
-
-		t->setVertices(tVs[0], tVs[1], tVs[2]);
-		t->setTriangles(tNeighb[0], tNeighb[1], tNeighb[2]);
-		
-		trianglesAll.add(t);
-	}
-	infile >> line;
-	assert(line == nT);
-
-	printf("read %s\n", geometryFilename.c_str());
-
-	for (auto v : vs) sliceSizes.at(v->time)++;
-	if (sphere) assert(sliceSizes.at(0) == 3);
-
-	for (auto t : trianglesAll) {
-		if (t->isUpwards()) {
-			auto v = t->getVertexLeft();
-			if (
-					v->getTriangleLeft() == v->getTriangleRight()->getTriangleLeft() 
-					&& v->getTriangleLeft()->getTriangleCenter() == v->getTriangleRight()->getTriangleCenter()->getTriangleLeft()
-			   ) {
-				verticesFour.add(v);
-			}
-		}
-
-		if (t->type != t->getTriangleRight()->type) {
-			trianglesFlip.add(t);
-		}
-	}
-
-	check();
-
-	imported = true;
-}
-
-std::string Universe::getGeometryFilename(int targetVolume, int slices, int seed) {
-	std::string expectedFn = "geom/geometry-V" + std::to_string(targetVolume) + "-sl" + std::to_string(slices) + "-s" + std::to_string(seed);
-
-	expectedFn += ".txt";
-	std::cout << "Searching for " << expectedFn << std::endl;
-
-	std::ifstream f(expectedFn.c_str());
-	if (f.good()) {
-		return expectedFn;
-	}
-
-	return "";
 }

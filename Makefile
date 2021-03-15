@@ -1,17 +1,15 @@
 #CXX = /usr/local/opt/llvm/bin/clang++
-CXXFLAGS	:= -std=c++14 -O3 -Wno-format
-# Add more warnings
-# CXXFLAGS	+= -Wall -Wextra
-
+CXXFLAGS = -std=c++14 -O3 -Wno-format
 
 #vpath %.cpp observables
 #vpath %.hpp observables
 
-MAIN	:= cdt2d.x
 SOURCES := $(wildcard *.cpp) $(wildcard observables/*.cpp)
 OBJECTS := $(patsubst %.cpp,%.o,$(SOURCES))
 DEPENDS := $(patsubst %.cpp,%.d,$(SOURCES))
 
+# ADD MORE WARNINGS!
+WARNING := -Wall -Wextra
 
 # .PHONY means these rules get executed even if
 # files of those names exist.
@@ -19,14 +17,13 @@ DEPENDS := $(patsubst %.cpp,%.d,$(SOURCES))
 
 # The first rule is the default, ie. "make",
 # "make all" and "make parking" mean the same
-all: $(MAIN)
+all: main.x
 
 clean:
-	$(RM) $(OBJECTS) $(DEPENDS) $(MAIN)
+	$(RM) $(OBJECTS) $(DEPENDS) main.x
 
 # Linking the executable from the object files
-$(MAIN): $(OBJECTS)
-	echo $(OBJECTS)
+main.x: $(OBJECTS)
 	$(CXX)  $(CXXFLAGS) $^ -o $@
 
 -include $(DEPENDS)
